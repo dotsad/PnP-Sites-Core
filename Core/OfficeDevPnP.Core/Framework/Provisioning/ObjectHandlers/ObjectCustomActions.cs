@@ -85,7 +85,7 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
                         RegistrationType = customAction.RegistrationType,
                         Remove = customAction.Remove,
                         Rights = customAction.Rights,
-                        ScriptBlock = parser.ParseString(customAction.ScriptBlock),
+                        ScriptBlock = parser.ParseString(customAction.ScriptBlock, "~site", "~sitecollection"),
                         ScriptSrc = parser.ParseString(customAction.ScriptSrc, "~site", "~sitecollection"),
                         Sequence = customAction.Sequence,
                         Title = parser.ParseString(customAction.Title),

@@ -121,7 +121,16 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
 
                         if (checkedOut)
                         {
-                            targetFile.CheckIn("", CheckinType.MajorCheckIn);
+                            if (file.Level != Model.FileLevel.Draft)
+                            {
+                                Microsoft.SharePoint.Client.FileLevel level = (Microsoft.SharePoint.Client.FileLevel)Enum.Parse(typeof(Microsoft.SharePoint.Client.FileLevel), file.Level.ToString());
+                                targetFile.PublishFileToLevel(level);
+                            }
+                            else
+                            {
+                                targetFile.CheckIn("", CheckinType.MajorCheckIn);
+                            }
+
                             web.Context.ExecuteQueryRetry();
                         }
 
@@ -132,6 +141,8 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
                             targetFile.ListItemAllFields.SetSecurity(parser, file.Security);
                         }
                     }
+
+
 
                 }
             }
@@ -198,12 +209,22 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
                     }
                 }
 
+                bool publishFile = false;
+                string publishFileLevel = String.Empty;
+
                 // Loop through and detect changes first, then, check out if required and apply
                 foreach (var kvp in properties)
                 {
                     var propertyName = kvp.Key;
                     var propertyValue = kvp.Value;
-                    
+
+                    if (propertyName.ToUpperInvariant().Equals("_LEVEL"))
+                    {
+                        publishFile = true;
+                        publishFileLevel = propertyValue;
+                        continue;
+                    }
+
                     var targetField = parentList.Fields.GetByInternalNameOrTitle(propertyName);
                     targetField.EnsureProperties(f => f.TypeAsString, f => f.ReadOnlyField);
 
@@ -288,6 +309,12 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
                     }
                     file.ListItemAllFields.Update();
                     context.ExecuteQueryRetry();
+                }
+
+                if (publishFile)
+                {
+                    Microsoft.SharePoint.Client.FileLevel level = (Microsoft.SharePoint.Client.FileLevel)Enum.Parse(typeof(Microsoft.SharePoint.Client.FileLevel), publishFileLevel);
+                    file.PublishFileToLevel(level);
                 }
             }
         }

@@ -903,6 +903,45 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.Providers.Xml
 
             #endregion
 
+            #region Publishing Pages
+            // Translate Pages, if any
+            if (template.PublishingPages != null)
+            {
+                var pages = new List<V201605.PublishingPage>();
+
+                foreach (var page in template.PublishingPages)
+                {
+                    var schemaPage = new V201605.PublishingPage();
+
+                    schemaPage.Layout = page.Layout;
+                    schemaPage.Overwrite = page.Overwrite;
+                    schemaPage.Security = (page.Security != null) ? page.Security.FromTemplateToSchemaObjectSecurityV201605() : null;
+
+                    schemaPage.WebParts = page.WebParts.Count > 0 ?
+                        (from wp in page.WebParts
+                         select new V201605.WebPartPageWebPart
+                         {
+                             Zone = wp.Zone,
+                             Order = (int)wp.Order,
+                             Contents = XElement.Parse(wp.Contents).ToXmlElement(),
+                             Title = wp.Title,
+                         }).ToArray() : null;
+
+                    schemaPage.Fields = (page.Fields != null && page.Fields.Count > 0) ?
+                                (from f in page.Fields
+                                 select new V201605.BaseFieldValue
+                                 {
+                                     FieldName = f.Key,
+                                     Value = f.Value,
+                                 }).ToArray() : null;
+
+                    pages.Add(schemaPage);
+                }
+
+                result.PublishingPages = pages.ToArray();
+            }
+            #endregion
+
             #region Taxonomy
 
             // Translate Taxonomy elements, if any
@@ -1920,6 +1959,32 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.Providers.Xml
             }
 
 
+            #endregion
+
+            #region Publishing Pages
+            // Translate Pages, if any
+            if (source.PublishingPages != null)
+            {
+                foreach (var page in source.PublishingPages)
+                {
+                    result.PublishingPages.Add(new Model.PublishingPage(page.Name, page.Overwrite, page.Layout,
+                        (page.WebParts != null ?
+                            (from wp in page.WebParts
+                             select new Model.WebPart
+                             {
+                                 Title = wp.Title,
+                                 Zone = wp.Zone,
+                                 Order = (uint)wp.Order,
+                                 Contents = wp.Contents.InnerXml
+                             }).ToList() : null),
+                        page.Security.FromSchemaToTemplateObjectSecurityV201605(),
+                        (page.Fields != null && page.Fields.Length > 0) ?
+                             (from f in page.Fields
+                              select f).ToDictionary(i => i.FieldName, i => i.Value) : null
+                        ));
+
+                }
+            }
             #endregion
 
             #region Taxonomy

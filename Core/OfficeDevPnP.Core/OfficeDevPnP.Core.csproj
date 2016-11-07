@@ -519,6 +519,8 @@
     <Compile Include="Framework\Provisioning\Model\ProvisioningTemplateDictionary.cs" />
     <Compile Include="Framework\Provisioning\Model\ProvisioningTemplateCollection.cs" />
     <Compile Include="Framework\Provisioning\Model\Publishing.cs" />
+    <Compile Include="Framework\Provisioning\Model\PublishingPage.cs" />
+    <Compile Include="Framework\Provisioning\Model\PublishingPageCollection.cs" />
     <Compile Include="Framework\Provisioning\Model\RoleAssignment.cs" />
     <Compile Include="Framework\Provisioning\Model\RoleAssignmentCollection.cs" />
     <Compile Include="Framework\Provisioning\Model\RoleDefinition.cs" />
@@ -565,6 +567,7 @@
     <Compile Include="Framework\Provisioning\ObjectHandlers\Extensions\UserResourceExtensions.cs" />
     <Compile Include="Framework\Provisioning\ObjectHandlers\ObjectLocalization.cs" />
     <Compile Include="Framework\Provisioning\ObjectHandlers\ObjectNavigation.cs" />
+    <Compile Include="Framework\Provisioning\ObjectHandlers\ObjectPublishingPages.cs" />
     <Compile Include="Framework\Provisioning\ObjectHandlers\ObjectWebSettings.cs" />
     <Compile Include="Framework\Provisioning\ObjectHandlers\ObjectPageContents.cs" />
     <Compile Include="Framework\Provisioning\ObjectHandlers\ObjectSupportedUILanguages.cs" />
