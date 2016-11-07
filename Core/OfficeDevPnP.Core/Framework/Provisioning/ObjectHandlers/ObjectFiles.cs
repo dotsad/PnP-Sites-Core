@@ -69,10 +69,7 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
                             scope.LogDebug(CoreResources.Provisioning_ObjectHandlers_Files_Uploading_and_overwriting_existing_file__0_, file.Src);
                             checkedOut = CheckOutIfNeeded(web, targetFile);
 
-                            using (var stream = GetFileStream(template, file))
-                            {
-                                targetFile = UploadFile(template, file, folder, stream);
-                            }
+                            targetFile = UploadFile(web, template, file, folder);
                         }
                         else
                         {
@@ -84,7 +81,7 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
                         using (var stream = GetFileStream(template, file))
                         {
                             scope.LogDebug(CoreResources.Provisioning_ObjectHandlers_Files_Uploading_file__0_, file.Src);
-                            targetFile = UploadFile(template, file, folder, stream);
+                            targetFile = UploadFile(web, template, file, folder);
                         }
 
                         checkedOut = CheckOutIfNeeded(web, targetFile);
@@ -209,21 +206,11 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
                     }
                 }
 
-                bool publishFile = false;
-                string publishFileLevel = String.Empty;
-
                 // Loop through and detect changes first, then, check out if required and apply
                 foreach (var kvp in properties)
                 {
                     var propertyName = kvp.Key;
                     var propertyValue = kvp.Value;
-
-                    if (propertyName.ToUpperInvariant().Equals("_LEVEL"))
-                    {
-                        publishFile = true;
-                        publishFileLevel = propertyValue;
-                        continue;
-                    }
 
                     var targetField = parentList.Fields.GetByInternalNameOrTitle(propertyName);
                     targetField.EnsureProperties(f => f.TypeAsString, f => f.ReadOnlyField);
@@ -231,7 +218,7 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
                     // Changed by PaoloPia because there are fields like PublishingPageLayout
                     // which are marked as read-only, but have to be overwritten while uploading
                     // a publishing page file and which in reality can still be written
-                    if (!targetField.ReadOnlyField || WriteableReadOnlyFields.Contains(propertyName.ToLower())) 
+                    if (!targetField.ReadOnlyField || WriteableReadOnlyFields.Contains(propertyName.ToLower()))
                     {
                         switch (propertyName.ToUpperInvariant())
                         {
@@ -310,30 +297,33 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
                     file.ListItemAllFields.Update();
                     context.ExecuteQueryRetry();
                 }
-
-                if (publishFile)
-                {
-                    Microsoft.SharePoint.Client.FileLevel level = (Microsoft.SharePoint.Client.FileLevel)Enum.Parse(typeof(Microsoft.SharePoint.Client.FileLevel), publishFileLevel);
-                    file.PublishFileToLevel(level);
-                }
             }
         }
 
-        private string Tokenize(Web web, string xml)
+        private static string Tokenize(Web web, string xml)
         {
             var lists = web.Lists;
+            Site site = (web.Context as ClientContext).Site;
             web.Context.Load(web, w => w.ServerRelativeUrl, w => w.Id);
             web.Context.Load(lists, ls => ls.Include(l => l.Id, l => l.Title));
+            web.Context.Load(site, s => s.ServerRelativeUrl);
             web.Context.ExecuteQueryRetry();
 
             foreach (var list in lists)
             {
                 xml = Regex.Replace(xml, list.Id.ToString(), string.Format("{{listid:{0}}}", list.Title), RegexOptions.IgnoreCase);
             }
+
             xml = Regex.Replace(xml, web.Id.ToString(), "{siteid}", RegexOptions.IgnoreCase);
+
             if (web.ServerRelativeUrl != "/")
             {
-                xml = Regex.Replace(xml, web.ServerRelativeUrl, "{site}", RegexOptions.IgnoreCase);
+                xml = Regex.Replace(xml, "{site}", web.ServerRelativeUrl, RegexOptions.IgnoreCase);
+            }
+
+            if (web.ServerRelativeUrl != "/")
+            {
+                xml = Regex.Replace(xml, "{sitecollection}", site.ServerRelativeUrl.TrimEnd('/'), RegexOptions.IgnoreCase);
             }
 
             return xml;
@@ -363,19 +353,40 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
             return _willExtract.Value;
         }
 
-        private static File UploadFile(ProvisioningTemplate template, Model.File file, Microsoft.SharePoint.Client.Folder folder, Stream stream)
+        private static File UploadFile(Web web, ProvisioningTemplate template, Model.File file, Microsoft.SharePoint.Client.Folder folder)
         {
             File targetFile = null;
             var fileName = template.Connector.GetFilenamePart(file.Src);
             try
             {
-                targetFile = folder.UploadFile(fileName, stream, file.Overwrite);
+                // Replace tokens in aspx files before uploading
+                if (fileName.EndsWith(".aspx") || fileName.EndsWith(".master") || fileName.EndsWith(".js"))
+                {
+                    string fileString = template.Connector.GetFile(file.Src);
+                    fileString = Tokenize(web, fileString);
+
+                    using (MemoryStream stream = new MemoryStream(Encoding.UTF8.GetBytes(fileString)))
+                    {
+                        targetFile = folder.UploadFile(fileName, stream, file.Overwrite);
+                    }
+                }
+                else
+                {
+                    using (var stream = template.Connector.GetFileStream(file.Src))
+                    {
+                        targetFile = folder.UploadFile(fileName, stream, file.Overwrite);
+                    }
+                }
+
             }
             catch (Exception)
             {
                 //The file name might contain encoded characters that prevent upload. Decode it and try again.
                 fileName = WebUtility.UrlDecode(fileName);
-                targetFile = folder.UploadFile(fileName, stream, file.Overwrite);
+                using (var stream = template.Connector.GetFileStream(file.Src))
+                {
+                    targetFile = folder.UploadFile(fileName, stream, file.Overwrite);
+                }
             }
             return targetFile;
         }
@@ -393,14 +404,14 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
                 container = fileName.Substring(0, tempFileName.LastIndexOf(@"\"));
                 fileName = fileName.Substring(tempFileName.LastIndexOf(@"\") + 1);
             }
-            
+
             // add the default provided container (if any)
             if (!String.IsNullOrEmpty(container))
             {
                 if (!String.IsNullOrEmpty(template.Connector.GetContainer()))
                 {
                     container = String.Format(@"{0}\{1}", template.Connector.GetContainer(), container);
-                }               
+                }
             }
             else
             {
@@ -441,7 +452,7 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
             return (result);
         }
 
-        internal static List<Model.File> GetDirectoryFiles(this Model.Directory directory, 
+        internal static List<Model.File> GetDirectoryFiles(this Model.Directory directory,
             Dictionary<String, Dictionary<String, String>> metadataProperties = null)
         {
             var result = new List<Model.File>();
